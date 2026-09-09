@@ -118,7 +118,7 @@ if __name__ == "__main__":
     print("\n[Base Paper Integration] Applying SMOTE for Data Balancing...")
     # Flatten X for SMOTE
     X_flat = X.reshape(X.shape[0], X.shape[1])
-    smote = SMOTE(random_state=42)
+    smote = SMOTE(random_state=42, k_neighbors=3)
     X_resampled, y_resampled = smote.fit_resample(X_flat, y)
     
     # Reshape back to 3D for Deep Learning (samples, timesteps, features)
@@ -145,7 +145,7 @@ if __name__ == "__main__":
     y_pred = np.argmax(model.predict(X_test), axis=1)
     acc = accuracy_score(y_test, y_pred)
     print(f"\n==========================================")
-    print(f"✅ MODEL TESTING ACCURACY: {acc * 100:.2f}%")
+    print(f"[SUCCESS] MODEL TESTING ACCURACY: {acc * 100:.2f}%")
     print(f"==========================================\n")
     print("Classification Report:")
     print(classification_report(y_test, y_pred, target_names=['N', 'S', 'V', 'F', 'Q']))
