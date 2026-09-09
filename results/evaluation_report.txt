@@ -1,0 +1,16 @@
+=== FINAL MODULE 4 EVALUATION REPORT ===
+
+Model: Enhanced CNN + BiLSTM + Attention
+Dataset: MIT-BIH Arrhythmia Database (Balanced via SMOTE)
+
+                      precision    recall  f1-score   support
+
+          Normal (N)       0.95      0.97      0.96      5817
+Supraventricular (S)       0.98      1.00      0.99      5817
+     Ventricular (V)       0.98      0.96      0.97      5817
+          Fusion (F)       0.94      0.92      0.93      5817
+         Unknown (Q)       0.00      0.00      0.00         0
+
+            accuracy                           0.96     23268
+           macro avg       0.77      0.77      0.77     23268
+        weighted avg       0.96      0.96      0.96     23268
