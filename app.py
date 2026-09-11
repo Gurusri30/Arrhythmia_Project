@@ -94,22 +94,21 @@ beat_index = st.sidebar.slider("Select Heartbeat Segment (Timeline):", 0, len(be
 selected_beat = beats[beat_index]
 
 st.sidebar.markdown("---")
-if st.sidebar.button("⚙️ Execute Full Analysis Pipeline", type="primary", use_container_width=True):
-    with st.spinner("Initializing Deep Learning Pipeline..."):
-        time.sleep(1)
-        input_data = selected_beat.reshape(1, 216, 1)
-        probs = model.predict(input_data)[0]
-        pred_idx = np.argmax(probs)
-        conf = probs[pred_idx] * 100
-        diag, risk_label, risk_score_base, advice = classes[pred_idx]
-        
-        # Calculate dynamic risk score based on confidence
-        dynamic_risk = min(100, risk_score_base + (conf / 10)) if pred_idx != 0 else (100 - conf)
-        
-        st.session_state['analysis'] = {
-            'diagnosis': diag, 'confidence': conf, 'probs': probs,
-            'risk_label': risk_label, 'risk_score': dynamic_risk, 'advice': advice
-        }
+
+# Instant Inference Logic (No button required)
+input_data = selected_beat.reshape(1, 216, 1)
+probs = model.predict(input_data, verbose=0)[0]
+pred_idx = np.argmax(probs)
+conf = probs[pred_idx] * 100
+diag, risk_label, risk_score_base, advice = classes[pred_idx]
+
+# Calculate dynamic risk score based on confidence
+dynamic_risk = min(100, risk_score_base + (conf / 10)) if pred_idx != 0 else (100 - conf)
+
+res = {
+    'diagnosis': diag, 'confidence': conf, 'probs': probs,
+    'risk_label': risk_label, 'risk_score': dynamic_risk, 'advice': advice
+}
 
 # ==========================================
 # 4. Advanced Tabbed Interface
@@ -134,60 +133,52 @@ with tab1:
 # --- TAB 2: AI Inference ---
 with tab2:
     st.markdown("### Phase 2: Neural Network Classification")
-    if 'analysis' in st.session_state:
-        res = st.session_state['analysis']
+    
+    col1, col2 = st.columns([1, 1])
+    with col1:
+        st.markdown('<div class="metric-card">', unsafe_allow_html=True)
+        st.metric(label="Predicted Arrhythmia Class", value=res['diagnosis'])
+        st.metric(label="Network Confidence", value=f"{res['confidence']:.2f} %")
+        st.markdown('</div>', unsafe_allow_html=True)
         
-        col1, col2 = st.columns([1, 1])
-        with col1:
-            st.markdown('<div class="metric-card">', unsafe_allow_html=True)
-            st.metric(label="Predicted Arrhythmia Class", value=res['diagnosis'])
-            st.metric(label="Network Confidence", value=f"{res['confidence']:.2f} %")
-            st.markdown('</div>', unsafe_allow_html=True)
-            
-        with col2:
-            class_labels = ['Normal (N)', 'Supraventricular (S)', 'Ventricular (V)', 'Fusion (F)', 'Unknown (Q)']
-            fig2 = px.bar(x=class_labels, y=res['probs']*100, labels={'x':'Arrhythmia Class', 'y':'Probability (%)'},
-                          title="Softmax Probability Distribution", color=class_labels, 
-                          color_discrete_sequence=px.colors.qualitative.Bold)
-            st.plotly_chart(fig2, use_container_width=True)
-    else:
-        st.info("👈 Click 'Execute Full Analysis Pipeline' in the sidebar to view results.")
+    with col2:
+        class_labels = ['Normal (N)', 'Supraventricular (S)', 'Ventricular (V)', 'Fusion (F)', 'Unknown (Q)']
+        fig2 = px.bar(x=class_labels, y=res['probs']*100, labels={'x':'Arrhythmia Class', 'y':'Probability (%)'},
+                      title="Softmax Probability Distribution", color=class_labels, 
+                      color_discrete_sequence=px.colors.qualitative.Bold)
+        st.plotly_chart(fig2, use_container_width=True)
 
 # --- TAB 3: Risk Prediction (NEW & ADVANCED) ---
 with tab3:
     st.markdown("### Phase 3: Clinical Risk Stratification System")
-    if 'analysis' in st.session_state:
-        res = st.session_state['analysis']
+    
+    col_r1, col_r2 = st.columns([1, 1])
+    with col_r1:
+        # Gauge Chart for Risk Score
+        fig_gauge = go.Figure(go.Indicator(
+            mode = "gauge+number",
+            value = res['risk_score'],
+            title = {'text': "Calculated Cardiac Risk Score"},
+            gauge = {
+                'axis': {'range': [None, 100]},
+                'bar': {'color': "black"},
+                'steps': [
+                    {'range': [0, 30], 'color': "lightgreen"},
+                    {'range': [30, 70], 'color': "gold"},
+                    {'range': [70, 100], 'color': "red"}],
+                'threshold': {'line': {'color': "black", 'width': 4}, 'thickness': 0.75, 'value': res['risk_score']}
+            }
+        ))
+        st.plotly_chart(fig_gauge, use_container_width=True)
         
-        col_r1, col_r2 = st.columns([1, 1])
-        with col_r1:
-            # Gauge Chart for Risk Score
-            fig_gauge = go.Figure(go.Indicator(
-                mode = "gauge+number",
-                value = res['risk_score'],
-                title = {'text': "Calculated Cardiac Risk Score"},
-                gauge = {
-                    'axis': {'range': [None, 100]},
-                    'bar': {'color': "black"},
-                    'steps': [
-                        {'range': [0, 30], 'color': "lightgreen"},
-                        {'range': [30, 70], 'color': "gold"},
-                        {'range': [70, 100], 'color': "red"}],
-                    'threshold': {'line': {'color': "black", 'width': 4}, 'thickness': 0.75, 'value': res['risk_score']}
-                }
-            ))
-            st.plotly_chart(fig_gauge, use_container_width=True)
-            
-        with col_r2:
-            st.markdown(f"#### Patient ID: `{patient_id}`")
-            st.markdown("---")
-            risk_color = "risk-critical" if res['risk_score'] >= 70 else ("risk-warning" if res['risk_score'] >= 30 else "risk-safe")
-            st.markdown(f"**Triage Level:** <span class='{risk_color}'>{res['risk_label'].upper()}</span>", unsafe_allow_html=True)
-            st.markdown("---")
-            st.markdown("#### 🩺 Clinical Action Required:")
-            st.warning(res['advice'])
-    else:
-        st.info("👈 Click 'Execute Full Analysis Pipeline' in the sidebar to calculate Risk Score.")
+    with col_r2:
+        st.markdown(f"#### Patient ID: `{patient_id}`")
+        st.markdown("---")
+        risk_color = "risk-critical" if res['risk_score'] >= 70 else ("risk-warning" if res['risk_score'] >= 30 else "risk-safe")
+        st.markdown(f"**Triage Level:** <span class='{risk_color}'>{res['risk_label'].upper()}</span>", unsafe_allow_html=True)
+        st.markdown("---")
+        st.markdown("#### 🩺 Clinical Action Required:")
+        st.warning(res['advice'])
 
 # --- TAB 4: Explainable AI ---
 with tab4:
