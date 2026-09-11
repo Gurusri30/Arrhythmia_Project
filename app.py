@@ -88,10 +88,10 @@ st.sidebar.image("https://cdn-icons-png.flaticon.com/512/3209/3209986.png", widt
 st.sidebar.markdown("### 🏥 Clinical Control Panel")
 st.sidebar.caption("Data Source: PhysioNet MIT-BIH Arrhythmia Database (Validated Clinical Data)")
 
-beat_index = st.sidebar.slider("Select Live ECG Trace Index:", 0, len(beats)-1, 15)
+patient_id = "MIT-BIH-REC-100"
+st.sidebar.text_input("Patient ID:", value=patient_id, disabled=True)
+beat_index = st.sidebar.slider("Select Heartbeat Segment (Timeline):", 0, len(beats)-1, 15)
 selected_beat = beats[beat_index]
-patient_id = f"MIT-BIH-PT-{8000 + beat_index}"
-st.sidebar.text_input("Auto-Generated Patient ID:", value=patient_id, disabled=True)
 
 st.sidebar.markdown("---")
 if st.sidebar.button("⚙️ Execute Full Analysis Pipeline", type="primary", use_container_width=True):
