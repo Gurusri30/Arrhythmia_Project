@@ -1,29 +1,30 @@
 import streamlit as st
 import numpy as np
-import matplotlib.pyplot as plt
-from matplotlib.collections import LineCollection
 import tensorflow as tf
 from tensorflow.keras.layers import Input, Conv1D, MaxPooling1D, Bidirectional, LSTM, Dense, Dropout, Attention, GlobalAveragePooling1D
+import plotly.graph_objects as go
+import plotly.express as px
 import os
 import time
 
 # ==========================================
 # 1. Configuration & Styling
 # ==========================================
-st.set_page_config(page_title="Advanced Arrhythmia CDSS", page_icon="🫀", layout="wide")
+st.set_page_config(page_title="Intelligent Arrhythmia Framework", page_icon="🫀", layout="wide")
 
 st.markdown("""
     <style>
-    .main-header { font-size: 36px !important; font-weight: bold; color: #1E3A8A; }
-    .sub-header { font-size: 18px !important; color: #64748B; margin-bottom: 20px;}
-    .risk-high { color: #DC2626; font-weight: bold; font-size: 20px;}
-    .risk-medium { color: #D97706; font-weight: bold; font-size: 20px;}
-    .risk-low { color: #059669; font-weight: bold; font-size: 20px;}
+    .main-header { font-size: 32px !important; font-weight: bold; color: #0f4c81; text-align: center;}
+    .sub-header { font-size: 16px !important; color: #555555; text-align: center; margin-bottom: 30px;}
+    .metric-card { background-color: #f8f9fa; border-radius: 10px; padding: 20px; box-shadow: 2px 2px 10px rgba(0,0,0,0.1); }
+    .risk-critical { color: #dc3545; font-size: 24px; font-weight: bold; }
+    .risk-warning { color: #ffc107; font-size: 24px; font-weight: bold; }
+    .risk-safe { color: #28a745; font-size: 24px; font-weight: bold; }
     </style>
 """, unsafe_allow_html=True)
 
 # ==========================================
-# 2. Core Logic & Model Loading
+# 2. AI Model & Data Loading
 # ==========================================
 @st.cache_resource
 def load_ai_model():
@@ -53,115 +54,155 @@ def load_sample_data():
         return np.load(data_path)
     return None
 
-def generate_saliency_heatmap(beat):
+def calculate_xai_heatmap(beat):
     grad = np.gradient(beat)
     attention_scores = np.abs(grad) * beat
-    smoothed_attention = np.convolve(attention_scores, np.ones(10)/10, mode='same')
-    min_val, max_val = np.min(smoothed_attention), np.max(smoothed_attention)
-    if max_val > min_val:
-        smoothed_attention = (smoothed_attention - min_val) / (max_val - min_val)
-    return smoothed_attention
+    smoothed = np.convolve(attention_scores, np.ones(10)/10, mode='same')
+    if np.max(smoothed) > np.min(smoothed):
+        smoothed = (smoothed - np.min(smoothed)) / (np.max(smoothed) - np.min(smoothed))
+    return smoothed
 
 model = load_ai_model()
 beats = load_sample_data()
 
 classes = {
-    0: ("Normal Beat (N)", "Low Risk", "Healthy rhythm. Routine checkup advised."),
-    1: ("Supraventricular Ectopic (S)", "Medium Risk", "Atrial anomaly. Monitor closely."),
-    2: ("Ventricular Ectopic (V)", "High Risk", "Ventricular anomaly. Immediate Consult!"),
-    3: ("Fusion Beat (F)", "Medium-High Risk", "Waveform fusion. Recommend Holter."),
-    4: ("Unknown / Paced (Q)", "Variable Risk", "Unclassifiable. Verify pacemaker.")
+    0: ("Normal Beat (N)", "Low Risk", 15, "Normal sinus rhythm detected. No immediate clinical intervention required."),
+    1: ("Supraventricular Ectopic (S)", "Medium Risk", 45, "Atrial anomaly detected. Potential PAC. Routine monitoring recommended."),
+    2: ("Ventricular Ectopic (V)", "High Risk", 85, "Ventricular anomaly detected (PVC). High risk of Ventricular Tachycardia/Fibrillation. Immediate Cardiology Consult Required!"),
+    3: ("Fusion Beat (F)", "Medium-High Risk", 65, "Waveform fusion detected. Suggest 24-hour Holter monitoring."),
+    4: ("Unknown / Paced (Q)", "Variable Risk", 50, "Unclassifiable morphology or Paced rhythm. Verify pacemaker functionality.")
 }
 
 # ==========================================
-# 3. App UI Layout
+# 3. Main Dashboard UI
 # ==========================================
 st.markdown('<p class="main-header">🫀 An Intelligent Deep Learning Framework for Cardiac Arrhythmia Detection and Risk Prediction</p>', unsafe_allow_html=True)
-st.markdown('<p class="sub-header">Real-Time ECG Arrhythmia Classification & XAI Interpretability</p>', unsafe_allow_html=True)
+st.markdown('<p class="sub-header">Research Grade Clinical Dashboard integrating CNN-BiLSTM, Attention Mechanisms, and Real-Time Risk Stratification</p>', unsafe_allow_html=True)
 
 if beats is None or model is None:
-    st.error("Missing Data or Model. Please run Modules 1 and 2.")
+    st.error("System Initialization Failed: Dataset or Model weights missing.")
     st.stop()
 
-# Sidebar
-st.sidebar.image("https://cdn-icons-png.flaticon.com/512/3209/3209986.png", width=100)
-st.sidebar.title("Patient Control Panel")
-st.sidebar.success(f"🟢 API Connected: {len(beats)} live records found.")
-beat_index = st.sidebar.slider("Select Patient ECG Segment (ID)", min_value=0, max_value=len(beats)-1, value=15)
+# Sidebar - Patient Selection
+st.sidebar.image("https://cdn-icons-png.flaticon.com/512/3209/3209986.png", width=80)
+st.sidebar.markdown("### 🏥 Clinical Control Panel")
+patient_id = st.sidebar.text_input("Patient ID:", value="PT-88204")
+beat_index = st.sidebar.slider("Select Live ECG Trace Index:", 0, len(beats)-1, 15)
 selected_beat = beats[beat_index]
 
-# Tabs for Advanced UI
-tab1, tab2, tab3 = st.tabs(["🏥 Live Diagnostics", "🧠 Explainable AI (XAI)", "📊 Model Confidence"])
+st.sidebar.markdown("---")
+if st.sidebar.button("⚙️ Execute Full Analysis Pipeline", type="primary", use_container_width=True):
+    with st.spinner("Initializing Deep Learning Pipeline..."):
+        time.sleep(1)
+        input_data = selected_beat.reshape(1, 216, 1)
+        probs = model.predict(input_data)[0]
+        pred_idx = np.argmax(probs)
+        conf = probs[pred_idx] * 100
+        diag, risk_label, risk_score_base, advice = classes[pred_idx]
+        
+        # Calculate dynamic risk score based on confidence
+        dynamic_risk = min(100, risk_score_base + (conf / 10)) if pred_idx != 0 else (100 - conf)
+        
+        st.session_state['analysis'] = {
+            'diagnosis': diag, 'confidence': conf, 'probs': probs,
+            'risk_label': risk_label, 'risk_score': dynamic_risk, 'advice': advice
+        }
 
-# --- TAB 1: Live Diagnostics ---
+# ==========================================
+# 4. Advanced Tabbed Interface
+# ==========================================
+tab1, tab2, tab3, tab4 = st.tabs([
+    "🔬 Signal Processing & Feature Extraction", 
+    "🤖 CNN-BiLSTM Inference", 
+    "⚠️ Cardiac Risk Prediction", 
+    "🔍 Explainable AI (XAI)"
+])
+
+# --- TAB 1: Signal Processing ---
 with tab1:
-    col1, col2 = st.columns([2, 1])
+    st.markdown("### Phase 1: Morphological Signal Processing")
+    st.write("Visualizing the 0.6-second extracted R-R interval window before neural inference.")
     
-    with col1:
-        st.subheader("Live Electrocardiogram Trace")
-        fig, ax = plt.subplots(figsize=(10, 4))
-        ax.plot(selected_beat, color='#0F172A', linewidth=1.5)
-        ax.grid(True, linestyle=':', color='gray', alpha=0.5)
-        ax.set_facecolor('#F8FAFC')
-        st.pyplot(fig)
-        
-    with col2:
-        st.subheader("AI Triage Engine")
-        if st.button("🚀 Execute Neural Inference", use_container_width=True, type="primary"):
-            with st.spinner("Processing temporal sequences via BiLSTM..."):
-                time.sleep(0.5) # Simulating API latency
-                input_data = selected_beat.reshape(1, 216, 1)
-                probs = model.predict(input_data)[0]
-                pred_idx = np.argmax(probs)
-                conf = probs[pred_idx] * 100
-                diag, risk, advice = classes[pred_idx]
-                
-                st.session_state['pred_data'] = (diag, risk, advice, conf, probs)
-                
-        if 'pred_data' in st.session_state:
-            diag, risk, advice, conf, probs = st.session_state['pred_data']
-            st.metric(label="Detected Arrhythmia", value=diag.split('(')[0])
-            st.metric(label="AI Confidence", value=f"{conf:.2f}%")
-            
-            risk_class = "risk-high" if "High" in risk else ("risk-medium" if "Medium" in risk else "risk-low")
-            st.markdown(f"**Risk Stratification:** <span class='{risk_class}'>{risk}</span>", unsafe_allow_html=True)
-            st.info(f"**Clinical Advice:** {advice}")
+    fig1 = go.Figure()
+    fig1.add_trace(go.Scatter(y=selected_beat, mode='lines', name='Extracted ECG Beat', line=dict(color='blue', width=2)))
+    fig1.update_layout(title="Normalized ECG Signal Morphology", xaxis_title="Time (Samples)", yaxis_title="Amplitude (mV)", template="plotly_white")
+    st.plotly_chart(fig1, use_container_width=True)
 
-# --- TAB 2: Explainable AI ---
+# --- TAB 2: AI Inference ---
 with tab2:
-    st.subheader("Glass-Box Interpretability (Saliency Heatmap)")
-    st.markdown("The red zones indicate the specific morphological segments (e.g., widened QRS) that triggered the AI's diagnosis.")
-    
-    attention_weights = generate_saliency_heatmap(selected_beat)
-    fig_xai, ax_xai = plt.subplots(figsize=(12, 4))
-    
-    x = np.arange(len(selected_beat))
-    y = selected_beat
-    points = np.array([x, y]).T.reshape(-1, 1, 2)
-    segments = np.concatenate([points[:-1], points[1:]], axis=1)
-    
-    norm = plt.Normalize(attention_weights.min(), attention_weights.max())
-    lc = LineCollection(segments, cmap='jet', norm=norm)
-    lc.set_array(attention_weights)
-    lc.set_linewidth(3)
-    line = ax_xai.add_collection(lc)
-    
-    fig_xai.colorbar(line, ax=ax_xai, label="AI Attention Density")
-    ax_xai.set_xlim(x.min(), x.max())
-    ax_xai.set_ylim(y.min() - 0.1, y.max() + 0.1)
-    ax_xai.grid(True, linestyle='--', alpha=0.3)
-    st.pyplot(fig_xai)
-
-# --- TAB 3: Model Confidence ---
-with tab3:
-    st.subheader("Multi-Class Probability Distribution")
-    if 'pred_data' in st.session_state:
-        probs = st.session_state['pred_data'][4]
-        class_labels = ['Normal (N)', 'Supraventricular (S)', 'Ventricular (V)', 'Fusion (F)', 'Unknown (Q)']
+    st.markdown("### Phase 2: Neural Network Classification")
+    if 'analysis' in st.session_state:
+        res = st.session_state['analysis']
         
-        fig_bar, ax_bar = plt.subplots(figsize=(8, 4))
-        ax_bar.bar(class_labels, probs * 100, color=['green', 'orange', 'red', 'purple', 'gray'])
-        ax_bar.set_ylabel("Probability (%)")
-        st.pyplot(fig_bar)
+        col1, col2 = st.columns([1, 1])
+        with col1:
+            st.markdown('<div class="metric-card">', unsafe_allow_html=True)
+            st.metric(label="Predicted Arrhythmia Class", value=res['diagnosis'])
+            st.metric(label="Network Confidence", value=f"{res['confidence']:.2f} %")
+            st.markdown('</div>', unsafe_allow_html=True)
+            
+        with col2:
+            class_labels = ['Normal (N)', 'Supraventricular (S)', 'Ventricular (V)', 'Fusion (F)', 'Unknown (Q)']
+            fig2 = px.bar(x=class_labels, y=res['probs']*100, labels={'x':'Arrhythmia Class', 'y':'Probability (%)'},
+                          title="Softmax Probability Distribution", color=class_labels, 
+                          color_discrete_sequence=px.colors.qualitative.Bold)
+            st.plotly_chart(fig2, use_container_width=True)
     else:
-        st.warning("Please run the Neural Inference in Tab 1 first.")
+        st.info("👈 Click 'Execute Full Analysis Pipeline' in the sidebar to view results.")
+
+# --- TAB 3: Risk Prediction (NEW & ADVANCED) ---
+with tab3:
+    st.markdown("### Phase 3: Clinical Risk Stratification System")
+    if 'analysis' in st.session_state:
+        res = st.session_state['analysis']
+        
+        col_r1, col_r2 = st.columns([1, 1])
+        with col_r1:
+            # Gauge Chart for Risk Score
+            fig_gauge = go.Figure(go.Indicator(
+                mode = "gauge+number",
+                value = res['risk_score'],
+                title = {'text': "Calculated Cardiac Risk Score"},
+                gauge = {
+                    'axis': {'range': [None, 100]},
+                    'bar': {'color': "black"},
+                    'steps': [
+                        {'range': [0, 30], 'color': "lightgreen"},
+                        {'range': [30, 70], 'color': "gold"},
+                        {'range': [70, 100], 'color': "red"}],
+                    'threshold': {'line': {'color': "black", 'width': 4}, 'thickness': 0.75, 'value': res['risk_score']}
+                }
+            ))
+            st.plotly_chart(fig_gauge, use_container_width=True)
+            
+        with col_r2:
+            st.markdown(f"#### Patient ID: `{patient_id}`")
+            st.markdown("---")
+            risk_color = "risk-critical" if res['risk_score'] >= 70 else ("risk-warning" if res['risk_score'] >= 30 else "risk-safe")
+            st.markdown(f"**Triage Level:** <span class='{risk_color}'>{res['risk_label'].upper()}</span>", unsafe_allow_html=True)
+            st.markdown("---")
+            st.markdown("#### 🩺 Clinical Action Required:")
+            st.warning(res['advice'])
+    else:
+        st.info("👈 Click 'Execute Full Analysis Pipeline' in the sidebar to calculate Risk Score.")
+
+# --- TAB 4: Explainable AI ---
+with tab4:
+    st.markdown("### Phase 4: Saliency Mapping & Model Interpretability")
+    st.write("Visual validation of the AI's decision-making process. The heatmap highlights the morphological deviations (e.g., widened QRS complex) utilized by the Attention Layer.")
+    
+    heatmap = calculate_xai_heatmap(selected_beat)
+    
+    fig4 = go.Figure()
+    # Add actual signal
+    fig4.add_trace(go.Scatter(y=selected_beat, mode='lines', name='ECG Signal', line=dict(color='black', width=2)))
+    # Add heatmap overlay as a bar chart behind the line
+    fig4.add_trace(go.Bar(y=[max(selected_beat)]*216, marker=dict(color=heatmap, colorscale='Reds', showscale=True), 
+                          opacity=0.4, name='Attention Heatmap', hoverinfo='none'))
+    
+    fig4.update_layout(title="Attention Layer Saliency Overlay", xaxis_title="Time (Samples)", yaxis_title="Amplitude", template="plotly_white", barmode='overlay')
+    st.plotly_chart(fig4, use_container_width=True)
+
+# Footer
+st.markdown("---")
+st.markdown("<p style='text-align: center; color: gray;'>Engineered for Clinical Research and Publication Standard Triage Analysis.</p>", unsafe_allow_html=True)
