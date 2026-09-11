@@ -76,7 +76,7 @@ classes = {
 # ==========================================
 # 3. App UI Layout
 # ==========================================
-st.markdown('<p class="main-header">🫀 Cardiac Arrhythmia Detection and Risk Prediction</p>', unsafe_allow_html=True)
+st.markdown('<p class="main-header">🫀 An Intelligent Deep Learning Framework for Cardiac Arrhythmia Detection and Risk Prediction</p>', unsafe_allow_html=True)
 st.markdown('<p class="sub-header">Real-Time ECG Arrhythmia Classification & XAI Interpretability</p>', unsafe_allow_html=True)
 
 if beats is None or model is None:
